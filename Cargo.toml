@@ -1,0 +1,18 @@
+[package]
+name = "rs-dma-uml-collab-diagram"
+version = "0.1.0"
+edition = "2021"
+description = "A native Linux GUI application for creating Rust UML Collaboration Diagrams"
+authors = ["David Marceau <uticdmarceau2007@yahoo.ca>"]
+
+[dependencies]
+slint = "1.15"
+rs-dma-lib = { path = "../rs-dma-lib" }
+rfd = "0.15"
+
+[build-dependencies]
+slint-build = "1.15"
+
+[[bin]]
+name = "rucd-editor"
+path = "src/main.rs"

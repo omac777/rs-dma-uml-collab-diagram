@@ -1,0 +1,488 @@
+import { Button } from "std-widgets.slint";
+
+component MessageLabel inherits Rectangle {
+    in-out property <string> msg_seq: "";
+    in-out property <string> msg_service: "";
+    in-out property <length> msg_x: 0px;
+    in-out property <length> msg_y: 0px;
+    in-out property <angle> msg_angle: 0deg;
+    in-out property <bool> visible_msg: false;
+    
+    x: msg_x;
+    y: msg_y;
+    // Use 0 width/height for container, size determined by children.
+    width: 0px; height: 0px;
+    clip: false;
+
+    // Rotated pivot container
+    Rectangle {
+        // Pivot point is at 0,0 (parent origin = msg_x, msg_y)
+        // We rotate THIS wrapper around 0,0.
+        transform-rotation: msg_angle;
+        
+        // Inner content centered on the pivot
+        Rectangle {
+            x: -layout.preferred-width / 2;
+            y: -layout.preferred-height / 2;
+            
+            layout := HorizontalLayout {
+                spacing: 0px;
+                padding: 0px;
+                alignment: center;
+
+                // Blue debug overlay for sequence number
+                Rectangle {
+                    background: #2196F3;
+                    width: t1.preferred_width + 4px;
+                    height: 18px;
+                    visible: visible_msg;
+                    t1 := Text {
+                        text: msg_seq;
+                        font-family: "monospace";
+                        font-size: 12px;
+                        color: white;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+
+                // Purple debug overlay for service name
+                Rectangle {
+                    background: #7E57C2;
+                    width: t2.preferred_width + 4px;
+                    height: 18px;
+                    visible: visible_msg;
+                    t2 := Text {
+                        text: msg_service;
+                        font-family: "monospace";
+                        font-size: 12px;
+                        color: white;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+
+                // Orange overlay for ASCII arrow (direction)
+                Rectangle {
+                    background: #FF9800;
+                    width: t3.preferred_width + 4px;
+                    height: 18px;
+                    visible: visible_msg;
+                    t3 := Text {
+                        text: "➔";
+                        font-family: "monospace";
+                        font-size: 14px;
+                        font-weight: 700;
+                        color: white;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+    }
+}
+
+component ObjectRect inherits Rectangle {
+    in-out property <string> obj_id: "";
+    in-out property <string> obj_name: "";
+    in-out property <length> obj_x: 0px;
+    in-out property <length> obj_y: 0px;
+    in-out property <bool> visible_obj: false;
+    in-out property <int> selection_state: 0;  // 0=none, 1=source-hover, 2=source-selected, 3=dest-hover, 4=dest-selected
+    in-out property <bool> is_selected: false;
+    
+    x: obj_x;
+    y: obj_y;
+    width: 150px;
+    height: 80px;
+    background: visible_obj ? #e3f2fd : transparent;
+    border-width: visible_obj ? (selection_state > 0 ? 4px : 2px) : 0px;
+    border-color: selection_state == 1 ? #42a5f5 :  // source-hover (light blue)
+                  selection_state == 2 ? #1976d2 :  // source-selected (dark blue)
+                  selection_state == 3 ? #66bb6a :  // dest-hover (light green)
+                  selection_state == 4 ? #2e7d32 :  // dest-selected (dark green)
+                  #1976d2;  // default
+    border-radius: 4px;
+    
+    // Selection handles with state-based colors
+    Rectangle { visible: selection_state == 2 || selection_state == 4; x: -6px; y: -6px; width: 12px; height: 12px; background: selection_state == 2 ? #1565c0 : #1b5e20; border-radius: 6px; }
+    Rectangle { visible: selection_state == 2 || selection_state == 4; x: root.width - 6px; y: -6px; width: 12px; height: 12px; background: selection_state == 2 ? #1565c0 : #1b5e20; border-radius: 6px; }
+    Rectangle { visible: selection_state == 2 || selection_state == 4; x: -6px; y: root.height - 6px; width: 12px; height: 12px; background: selection_state == 2 ? #1565c0 : #1b5e20; border-radius: 6px; }
+    Rectangle { visible: selection_state == 2 || selection_state == 4; x: root.width - 6px; y: root.height - 6px; width: 12px; height: 12px; background: selection_state == 2 ? #1565c0 : #1b5e20; border-radius: 6px; }
+    
+    Text {
+        x: 0px;
+        y: 0px;
+        width: 150px;
+        height: 80px;
+        text: obj_name;
+        font-family: "monospace";
+        font-size: 14px;
+        color: #0d47a1;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+component AssociationLine inherits Rectangle {
+    in-out property <string> assoc_id: "";
+    in-out property <length> assoc_x: 0px;
+    in-out property <length> assoc_y: 0px;
+    in-out property <length> assoc_len: 0px;
+    in-out property <angle> assoc_angle: 0deg;
+    in-out property <bool> visible_assoc: false;
+    in-out property <int> selection_state: 0;  // 0=none, 1=hover, 2=selected
+    
+    // Callback passed from parent
+    callback association_line_clicked;
+    
+    // Position the container at the midpoint between objects
+    // The line will be centered here and rotate around this point
+    x: assoc_x;
+    y: assoc_y;
+    width: assoc_len;
+    height: 8px;  // Wider for easier clicking
+    background: transparent; // Container is invisible (hit area)
+    
+    // Visible line (thinner, centered in hit area)
+    Rectangle {
+        x: -assoc_len / 2;
+        y: 2px;  // Center in 8px height
+        width: assoc_len;
+        height: 3px;
+        background: selection_state == 2 ? #d32f2f :  // selected (red)
+                    selection_state == 1 ? #1976d2 :  // hover (blue)
+                    (visible_assoc ? #90a4ae : transparent);  // normal (gray)
+        transform-rotation: assoc_angle;
+    }
+    
+    // Pass ID to parent via a property when clicked
+    property <string> clicked_assoc_id: "";
+    TouchArea {
+        clicked => { 
+            root.clicked_assoc_id = root.assoc_id;
+            root.association_line_clicked();
+        }
+    }
+    
+    // Yellow debug box - centered on the line midpoint, offset above to stay visible
+    Rectangle {
+        z: 2000;  // High z-order to stay on top
+        x: -40px;  // Center on midpoint (80px wide box, so -40px centers it)
+        y: -35px;  // Above the line
+        width: 80px;
+        height: 25px;
+        background: yellow;
+        border-width: 1px;
+        border-color: black;
+        visible: visible_assoc;
+        Text { 
+            x: 3px; 
+            y: 4px; 
+            color: black; 
+            font-size: 10px; 
+            text: root.assoc_angle / 1deg + " deg"; 
+        }
+    }
+}
+
+// Simple dialog component for type selection
+component TypeSelectorDialog inherits Rectangle {
+    in-out property <bool> visible_dialog: false;
+    in-out property <string> selected_type: "";
+    in-out property <string> object_name: "";
+    in-out property <int> ingested_types_count: 0;
+    
+    // Type list (first 4 types shown)
+    in-out property <string> type1_name: "";
+    in-out property <string> type2_name: "";
+    in-out property <string> type3_name: "";
+    in-out property <string> type4_name: "";
+    
+    callback confirm;
+    callback cancel;
+    callback type1_selected;
+    callback type2_selected;
+    callback type3_selected;
+    callback type4_selected;
+    
+    x: 0px;
+    y: 0px;
+    width: 1200px;  // Match MainWindow width
+    height: 750px;  // Match MainWindow height
+    background: rgba(0, 0, 0, 100);  // Semi-transparent overlay
+    visible: visible_dialog;
+    
+    // Dialog box
+    Rectangle {
+        x: (parent.width - 400px) / 2;
+        y: (parent.height - 300px) / 2;
+        width: 400px;
+        height: 300px;
+        background: white;
+        border-width: 2px;
+        border-color: #1976d2;
+        border-radius: 8px;
+        
+        Text {
+            x: 15px;
+            y: 15px;
+            text: "Add Object";
+            font-size: 18px;
+            font-weight: 700;
+        }
+        
+        Text {
+            x: 15px;
+            y: 50px;
+            text: "Select Type:";
+            font-size: 14px;
+        }
+        
+        // Type list - scrollable area showing all types
+        Rectangle {
+            x: 15px;
+            y: 75px;
+            width: 370px;
+            height: 120px;
+            background: white;
+            border-width: 1px;
+            border-color: #1976d2;
+            border-radius: 4px;
+            clip: true;
+            
+            // First type
+            Rectangle {
+                x: 5px; y: 5px; width: 360px; height: 32px;
+                background: selected_type == type1_name && type1_name != "" ? #1976d2 : transparent;
+                border-radius: 4px;
+                visible: type1_name != "";
+                Text { x: 10px; y: 8px; text: type1_name; color: selected_type == type1_name ? white : black; font-size: 13px; }
+                TouchArea { clicked => { type1_selected(); } }
+            }
+            // Second type
+            Rectangle {
+                x: 5px; y: 39px; width: 360px; height: 32px;
+                background: selected_type == type2_name && type2_name != "" ? #1976d2 : transparent;
+                border-radius: 4px;
+                visible: type2_name != "";
+                Text { x: 10px; y: 8px; text: type2_name; color: selected_type == type2_name ? white : black; font-size: 13px; }
+                TouchArea { clicked => { type2_selected(); } }
+            }
+            // Third type
+            Rectangle {
+                x: 5px; y: 73px; width: 360px; height: 32px;
+                background: selected_type == type3_name && type3_name != "" ? #1976d2 : transparent;
+                border-radius: 4px;
+                visible: type3_name != "";
+                Text { x: 10px; y: 8px; text: type3_name; color: selected_type == type3_name ? white : black; font-size: 13px; }
+                TouchArea { clicked => { type3_selected(); } }
+            }
+            // Fourth type
+            Rectangle {
+                x: 5px; y: 107px; width: 360px; height: 32px;
+                background: selected_type == type4_name && type4_name != "" ? #1976d2 : transparent;
+                border-radius: 4px;
+                visible: type4_name != "";
+                Text { x: 10px; y: 8px; text: type4_name; color: selected_type == type4_name ? white : black; font-size: 13px; }
+                TouchArea { clicked => { type4_selected(); } }
+            }
+        }
+        
+        Text {
+            x: 15px;
+            y: 210px;
+            text: "Object will be auto-named (type: name)";
+            font-size: 12px;
+            color: gray;
+        }
+        
+        // Buttons
+        Button {
+            x: 190px;
+            y: 280px;
+            text: "Cancel";
+            clicked => { cancel(); }
+        }
+        Button {
+            x: 290px;
+            y: 280px;
+            text: "Add";
+            clicked => { confirm(); }
+        }
+    }
+}
+
+export component MainWindow inherits Window {
+    width: 1200px;
+    height: 750px;
+    title: "Rust UML Collaboration Diagram Editor";
+
+    callback new_project;
+    callback open_project;
+    callback save_project;
+    callback add_object;
+    callback start_association;
+    callback add_message;
+    callback type1_clicked;
+    callback type2_clicked;
+    callback type3_clicked;
+    callback type4_clicked;
+    callback dialog_confirmed;
+    callback dialog_cancelled;
+    callback layout_objects;
+    callback ingest_sources;
+    callback show_sample;
+    callback object_clicked(string);
+    callback object_hovered(string, bool);
+    callback association_clicked(string);
+    callback association_line_clicked(string);
+    callback endpoints;
+
+    in-out property <length> toolbar_height: 50px;
+    in-out property <length> properties_width: 320px;
+    in-out property <length> scroll_x: 0px;
+    in-out property <length> scroll_y: 0px;
+    in-out property <string> selected_id: "";
+    in-out property <string> selected_name: "";
+    in-out property <string> selected_type: "";
+    in-out property <bool> selected_obj_trait: false;
+    in-out property <length> selected_obj_x: 0px;
+    in-out property <length> selected_obj_y: 0px;
+    in-out property <bool> has_selection: false;
+    in-out property <bool> creating_association: false;
+    in-out property <bool> creating_message: false;
+    in-out property <bool> show_type_dialog: false;
+    in-out property <string> dialog_selected_type: "";
+    in-out property <string> dialog_object_name: "";
+    in-out property <int> ingested_types_count: 0;
+    in-out property <string> type_selector_type1: "";
+    in-out property <string> type_selector_type2: "";
+    in-out property <string> type_selector_type3: "";
+    in-out property <string> type_selector_type4: "";
+    in-out property <string> project_name: "";
+    in-out property <string> selected_obj_id: "";
+    in-out property <string> selected_obj_name: "";
+    in-out property <string> selected_obj_type: "";
+    in-out property <length> selected_obj_center_x: 0px;
+    in-out property <length> selected_obj_center_y: 0px;
+
+    property <length> divider_width: 6px;
+    property <length> scrollbar_size: 20px;
+    property <length> canvas_y: toolbar_height;
+    property <length> canvas_width: root.width - properties_width - divider_width - scrollbar_size;
+    property <length> canvas_height: root.height - toolbar_height - scrollbar_size;
+
+    Rectangle {
+        x: 0px; y: 0px; width: root.width - properties_width; height: toolbar_height;
+        background: #f5f5f5;
+        Button { x: 10px; y: 12px; text: "New"; clicked => { new_project(); } }
+        Button { x: 70px; y: 12px; text: "Open"; clicked => { open_project(); } }
+        Button { x: 130px; y: 12px; text: "Save"; clicked => { save_project(); } }
+        Button { x: 190px; y: 12px; text: "+Object"; clicked => { add_object(); } }
+        Button { x: 270px; y: 12px; text: "Association"; clicked => { start_association(); } }
+        Button { x: 390px; y: 12px; text: "Message"; clicked => { add_message(); } }
+        Button { x: 490px; y: 12px; text: "Layout"; clicked => { layout_objects(); } }
+        Button { x: 590px; y: 12px; text: "Ingest Rust"; clicked => { ingest_sources(); } }
+        Button { x: 710px; y: 12px; text: "Sample Objects"; clicked => { show_sample(); } }
+    }
+    Rectangle { x: 0px; y: toolbar_height - 1px; width: root.width - properties_width; height: 1px; background: #cccccc; }
+
+    Rectangle {
+        x: 0px; y: canvas_y; width: canvas_width; height: canvas_height;
+        background: #ffffff; border-width: 1px; border-color: #cccccc; clip: true;
+        
+        Rectangle {
+            x: -scroll_x; y: -scroll_y; width: 2000px; height: 2000px; background: #fafafa;
+            
+            AssociationLine { assoc_id: "a1"; assoc_x: assoc1_x; assoc_y: assoc1_y; assoc_len: assoc1_len; assoc_angle: assoc1_angle; visible_assoc: assoc1_visible; selection_state: assoc1_selection_state; association_line_clicked => { association_line_clicked(assoc1_id); } }
+            AssociationLine { assoc_id: "a2"; assoc_x: assoc2_x; assoc_y: assoc2_y; assoc_len: assoc2_len; assoc_angle: assoc2_angle; visible_assoc: assoc2_visible; }
+            AssociationLine { assoc_id: "a3"; assoc_x: assoc3_x; assoc_y: assoc3_y; assoc_len: assoc3_len; assoc_angle: assoc3_angle; visible_assoc: assoc3_visible; }
+            AssociationLine { assoc_id: "a4"; assoc_x: assoc4_x; assoc_y: assoc4_y; assoc_len: assoc4_len; assoc_angle: assoc4_angle; visible_assoc: assoc4_visible; }
+            AssociationLine { assoc_id: "a5"; assoc_x: assoc5_x; assoc_y: assoc5_y; assoc_len: assoc5_len; assoc_angle: assoc5_angle; visible_assoc: assoc5_visible; }
+            
+            ObjectRect { obj_id: obj1_id; obj_name: obj1_name; obj_x: obj1_center_x; obj_y: obj1_center_y; visible_obj: obj1_visible; is_selected: obj1_selected; }
+            ObjectRect { obj_id: obj2_id; obj_name: obj2_name; obj_x: obj2_center_x; obj_y: obj2_center_y; visible_obj: obj2_visible; is_selected: obj2_selected; }
+            ObjectRect { obj_id: obj3_id; obj_name: obj3_name; obj_x: obj3_center_x; obj_y: obj3_center_y; visible_obj: obj3_visible; is_selected: obj3_selected; }
+            ObjectRect { obj_id: obj4_id; obj_name: obj4_name; obj_x: obj4_center_x; obj_y: obj4_center_y; visible_obj: obj4_visible; is_selected: obj4_selected; }
+            ObjectRect { obj_id: obj5_id; obj_name: obj5_name; obj_x: obj5_center_x; obj_y: obj5_center_y; visible_obj: obj5_visible; is_selected: obj5_selected; }
+            ObjectRect { obj_id: obj6_id; obj_name: obj6_name; obj_x: obj6_center_x; obj_y: obj6_center_y; visible_obj: obj6_visible; is_selected: obj6_selected; }
+            ObjectRect { obj_id: obj7_id; obj_name: obj7_name; obj_x: obj7_center_x; obj_y: obj7_center_y; visible_obj: obj7_visible; is_selected: obj7_selected; }
+            ObjectRect { obj_id: obj8_id; obj_name: obj8_name; obj_x: obj8_center_x; obj_y: obj8_center_y; visible_obj: obj8_visible; is_selected: obj8_selected; }
+            ObjectRect { obj_id: obj9_id; obj_name: obj9_name; obj_x: obj9_center_x; obj_y: obj9_center_y; visible_obj: obj9_visible; is_selected: obj9_selected; }
+            ObjectRect { obj_id: obj10_id; obj_name: obj10_name; obj_x: obj10_center_x; obj_y: obj10_center_y; visible_obj: obj10_visible; is_selected: obj10_selected; }
+            
+            MessageLabel { msg_seq: msg1_seq; msg_service: msg1_svc; msg_x: msg1_x; msg_y: msg1_y; msg_angle: msg1_angle; visible_msg: msg1_vis; }
+            MessageLabel { msg_seq: msg2_seq; msg_service: msg2_svc; msg_x: msg2_x; msg_y: msg2_y; msg_angle: msg2_angle; visible_msg: msg2_vis; }
+            MessageLabel { msg_seq: msg3_seq; msg_service: msg3_svc; msg_x: msg3_x; msg_y: msg3_y; msg_angle: msg3_angle; visible_msg: msg3_vis; }
+            MessageLabel { msg_seq: msg4_seq; msg_service: msg4_svc; msg_x: msg4_x; msg_y: msg4_y; msg_angle: msg4_angle; visible_msg: msg4_vis; }
+            MessageLabel { msg_seq: msg5_seq; msg_service: msg5_svc; msg_x: msg5_x; msg_y: msg5_y; msg_angle: msg5_angle; visible_msg: msg5_vis; }
+            MessageLabel { msg_seq: msg6_seq; msg_service: msg6_svc; msg_x: msg6_x; msg_y: msg6_y; msg_angle: msg6_angle; visible_msg: msg6_vis; }
+            MessageLabel { msg_seq: msg7_seq; msg_service: msg7_svc; msg_x: msg7_x; msg_y: msg7_y; msg_angle: msg7_angle; visible_msg: msg7_vis; }
+            MessageLabel { msg_seq: msg8_seq; msg_service: msg8_svc; msg_x: msg8_x; msg_y: msg8_y; msg_angle: msg8_angle; visible_msg: msg8_vis; }
+            MessageLabel { msg_seq: msg9_seq; msg_service: msg9_svc; msg_x: msg9_x; msg_y: msg9_y; msg_angle: msg9_angle; visible_msg: msg9_vis; }
+        }
+    }
+    
+    Rectangle { x: 0px; y: canvas_y + canvas_height; width: canvas_width; height: scrollbar_size; background: #f5f5f5; border-width: 1px; border-color: #cccccc; Rectangle { x: 10px + scroll_x / 10; y: 2px; width: 150px; height: 16px; background: #bdbdbd; border-radius: 3px; } TouchArea { x: canvas_width / 2; width: canvas_width / 2; height: scrollbar_size; clicked => { scroll_x = (scroll_x + 100px).min(1800px); } } TouchArea { width: canvas_width / 2; height: scrollbar_size; clicked => { scroll_x = (scroll_x - 100px).max(0px); } } }
+    Rectangle { x: canvas_width; y: canvas_y; width: scrollbar_size; height: canvas_height; background: #f5f5f5; border-width: 1px; border-color: #cccccc; Rectangle { x: 2px; y: 10px + scroll_y / 10; width: 16px; height: 150px; background: #bdbdbd; border-radius: 3px; } TouchArea { x: scrollbar_size; y: canvas_height / 2; width: scrollbar_size; height: canvas_height / 2; clicked => { scroll_y = (scroll_y + 100px).min(1800px); } } TouchArea { x: scrollbar_size; height: canvas_height / 2; width: scrollbar_size; clicked => { scroll_y = (scroll_y - 100px).max(0px); } } }
+    Rectangle { x: canvas_width; y: toolbar_height; width: divider_width; height: canvas_height; background: #e0e0e0; }
+    
+    Rectangle {
+        x: root.width - properties_width; y: toolbar_height; width: properties_width; height: root.height - toolbar_height;
+        background: #fafafa; border-width: 1px; border-color: #cccccc;
+        Text { x: 15px; y: 15px; text: "Properties"; font-size: 16px; font-weight: 700; color: #212121; }
+        Text { x: 15px; y: 50px; text: "Selected: " + (selected_id != "" ? selected_name : "None"); font-size: 13px; color: #424242; }
+        Text { x: 15px; y: 85px; text: "Type: " + selected_type; font-size: 13px; color: #424242; }
+        Rectangle { x: 15px; y: 120px; width: properties_width - 30px; height: 1px; background: #e0e0e0; }
+        Text { x: 15px; y: 140px; text: "Note: Yellow boxes show association angles"; font-size: 11px; color: #757575; }
+    }
+    
+    // Type selector dialog overlay
+    TypeSelectorDialog {
+        visible_dialog: show_type_dialog;
+        selected_type: dialog_selected_type;
+        object_name: dialog_object_name;
+        type1_name: type_selector_type1;
+        type2_name: type_selector_type2;
+        type3_name: type_selector_type3;
+        type4_name: type_selector_type4;
+        confirm => { dialog_confirmed(); }
+        cancel => { dialog_cancelled(); }
+        type1_selected => { type1_clicked(); }
+        type2_selected => { type2_clicked(); }
+        type3_selected => { type3_clicked(); }
+        type4_selected => { type4_clicked(); }
+    }
+
+    // Dialog internal state (not exposed to Rust directly)
+    property <string> dialog_internal_type: "";
+
+    in-out property <string> obj1_id: ""; in-out property <string> obj1_name: ""; in-out property <string> obj1_type: ""; in-out property <length> obj1_center_x: 0px; in-out property <length> obj1_center_y: 0px; in-out property <bool> obj1_visible: false; in-out property <bool> obj1_selected: false; in-out property <int> obj1_selection_state: 0;
+    in-out property <string> obj2_id: ""; in-out property <string> obj2_name: ""; in-out property <string> obj2_type: ""; in-out property <length> obj2_center_x: 0px; in-out property <length> obj2_center_y: 0px; in-out property <bool> obj2_visible: false; in-out property <bool> obj2_selected: false;
+    in-out property <string> obj3_id: ""; in-out property <string> obj3_name: ""; in-out property <string> obj3_type: ""; in-out property <length> obj3_center_x: 0px; in-out property <length> obj3_center_y: 0px; in-out property <bool> obj3_visible: false; in-out property <bool> obj3_selected: false;
+    in-out property <string> obj4_id: ""; in-out property <string> obj4_name: ""; in-out property <string> obj4_type: ""; in-out property <length> obj4_center_x: 0px; in-out property <length> obj4_center_y: 0px; in-out property <bool> obj4_visible: false; in-out property <bool> obj4_selected: false;
+    in-out property <string> obj5_id: ""; in-out property <string> obj5_name: ""; in-out property <string> obj5_type: ""; in-out property <length> obj5_center_x: 0px; in-out property <length> obj5_center_y: 0px; in-out property <bool> obj5_visible: false; in-out property <bool> obj5_selected: false;
+    in-out property <string> obj6_id: ""; in-out property <string> obj6_name: ""; in-out property <string> obj6_type: ""; in-out property <length> obj6_center_x: 0px; in-out property <length> obj6_center_y: 0px; in-out property <bool> obj6_visible: false; in-out property <bool> obj6_selected: false;
+    in-out property <string> obj7_id: ""; in-out property <string> obj7_name: ""; in-out property <string> obj7_type: ""; in-out property <length> obj7_center_x: 0px; in-out property <length> obj7_center_y: 0px; in-out property <bool> obj7_visible: false; in-out property <bool> obj7_selected: false;
+    in-out property <string> obj8_id: ""; in-out property <string> obj8_name: ""; in-out property <string> obj8_type: ""; in-out property <length> obj8_center_x: 0px; in-out property <length> obj8_center_y: 0px; in-out property <bool> obj8_visible: false; in-out property <bool> obj8_selected: false;
+    in-out property <string> obj9_id: ""; in-out property <string> obj9_name: ""; in-out property <string> obj9_type: ""; in-out property <length> obj9_center_x: 0px; in-out property <length> obj9_center_y: 0px; in-out property <bool> obj9_visible: false; in-out property <bool> obj9_selected: false;
+    in-out property <string> obj10_id: ""; in-out property <string> obj10_name: ""; in-out property <string> obj10_type: ""; in-out property <length> obj10_center_x: 0px; in-out property <length> obj10_center_y: 0px; in-out property <bool> obj10_visible: false; in-out property <bool> obj10_selected: false;
+    
+    in-out property <string> assoc1_id: ""; in-out property <length> assoc1_x: 0px; in-out property <length> assoc1_y: 0px; in-out property <length> assoc1_len: 0px; in-out property <angle> assoc1_angle: 0deg; in-out property <bool> assoc1_visible: false; in-out property <int> assoc1_selection_state: 0;
+    in-out property <length> assoc2_x: 0px; in-out property <length> assoc2_y: 0px; in-out property <length> assoc2_len: 0px; in-out property <angle> assoc2_angle: 0deg; in-out property <bool> assoc2_visible: false;
+    in-out property <length> assoc3_x: 0px; in-out property <length> assoc3_y: 0px; in-out property <length> assoc3_len: 0px; in-out property <angle> assoc3_angle: 0deg; in-out property <bool> assoc3_visible: false;
+    in-out property <length> assoc4_x: 0px; in-out property <length> assoc4_y: 0px; in-out property <length> assoc4_len: 0px; in-out property <angle> assoc4_angle: 0deg; in-out property <bool> assoc4_visible: false;
+    in-out property <length> assoc5_x: 0px; in-out property <length> assoc5_y: 0px; in-out property <length> assoc5_len: 0px; in-out property <angle> assoc5_angle: 0deg; in-out property <bool> assoc5_visible: false;
+    
+    in-out property <string> msg1_seq: ""; in-out property <string> msg1_svc: ""; in-out property <length> msg1_x: 0px; in-out property <length> msg1_y: 0px; in-out property <angle> msg1_angle: 0deg; in-out property <bool> msg1_vis: false;
+    in-out property <string> msg2_seq: ""; in-out property <string> msg2_svc: ""; in-out property <length> msg2_x: 0px; in-out property <length> msg2_y: 0px; in-out property <angle> msg2_angle: 0deg; in-out property <bool> msg2_vis: false;
+    in-out property <string> msg3_seq: ""; in-out property <string> msg3_svc: ""; in-out property <length> msg3_x: 0px; in-out property <length> msg3_y: 0px; in-out property <angle> msg3_angle: 0deg; in-out property <bool> msg3_vis: false;
+    in-out property <string> msg4_seq: ""; in-out property <string> msg4_svc: ""; in-out property <length> msg4_x: 0px; in-out property <length> msg4_y: 0px; in-out property <angle> msg4_angle: 0deg; in-out property <bool> msg4_vis: false;
+    in-out property <string> msg5_seq: ""; in-out property <string> msg5_svc: ""; in-out property <length> msg5_x: 0px; in-out property <length> msg5_y: 0px; in-out property <angle> msg5_angle: 0deg; in-out property <bool> msg5_vis: false;
+    in-out property <string> msg6_seq: ""; in-out property <string> msg6_svc: ""; in-out property <length> msg6_x: 0px; in-out property <length> msg6_y: 0px; in-out property <angle> msg6_angle: 0deg; in-out property <bool> msg6_vis: false;
+    in-out property <string> msg7_seq: ""; in-out property <string> msg7_svc: ""; in-out property <length> msg7_x: 0px; in-out property <length> msg7_y: 0px; in-out property <angle> msg7_angle: 0deg; in-out property <bool> msg7_vis: false;
+    in-out property <string> msg8_seq: ""; in-out property <string> msg8_svc: ""; in-out property <length> msg8_x: 0px; in-out property <length> msg8_y: 0px; in-out property <angle> msg8_angle: 0deg; in-out property <bool> msg8_vis: false;
+    in-out property <string> msg9_seq: ""; in-out property <string> msg9_svc: ""; in-out property <length> msg9_x: 0px; in-out property <length> msg9_y: 0px; in-out property <angle> msg9_angle: 0deg; in-out property <bool> msg9_vis: false;
+}
