@@ -279,7 +279,7 @@ fn main() {
                 let source = src.unwrap();
                 
                 if source == target {
-                    println!("rust-side: ⚠ Can't associate object with itself");
+                    println!("rust-side:  Can't associate object with itself");
                     win6b.set_creating_association(false);
                     *sel6b.borrow_mut() = None;
                     render_all(&win6b, &*proj6b.borrow(), None);
@@ -489,7 +489,6 @@ fn main() {
         pb.associations.push(Association { id: "CA".into(), source_id: "C".into(), target_id: "A".into() });
         
         // Create 9 messages: 3 per association
-        // Sequence: 1.1→msg1(AB), 1.2→msg4(BC), 1.3→msg7(CA), 2.1→msg2(AB), 2.2→msg5(BC), 2.3→msg8(CA), 3.1→msg3(AB), 3.2→msg6(BC), 3.3→msg9(CA)
         pb.messages.push(Message { id: "msg1".into(), association_id: "AB".into(), sequence_number: "1.1".into(), service_name: "message1".into(), source_object_id: "A".into(), target_object_id: "B".into() });
         pb.messages.push(Message { id: "msg2".into(), association_id: "AB".into(), sequence_number: "2.1".into(), service_name: "message2".into(), source_object_id: "A".into(), target_object_id: "B".into() });
         pb.messages.push(Message { id: "msg3".into(), association_id: "AB".into(), sequence_number: "3.1".into(), service_name: "message3".into(), source_object_id: "A".into(), target_object_id: "B".into() });
@@ -536,10 +535,9 @@ fn render_all(window: &MainWindow, proj: &RucdProject, selected_id: Option<&str>
     // Render objects
     for (i, obj) in proj.objects.iter().take(10).enumerate() {
         let is_selected = Some(obj.id.as_str()) == selected_id;
-        // Pass top-left corner (obj.x, obj.y) not center - ObjectRect sizes text relative to itself
         let top_left_x = obj.x;
         let top_left_y = obj.y;
-        
+
         match i {
             0 => { window.set_obj1_id(obj.id.clone().into()); window.set_obj1_name(obj.name.clone().into()); window.set_obj1_type(obj.type_name.clone().into()); window.set_obj1_center_x(top_left_x as f32); window.set_obj1_center_y(top_left_y as f32); window.set_obj1_visible(true); window.set_obj1_selected(is_selected); }
             1 => { window.set_obj2_id(obj.id.clone().into()); window.set_obj2_name(obj.name.clone().into()); window.set_obj2_type(obj.type_name.clone().into()); window.set_obj2_center_x(top_left_x as f32); window.set_obj2_center_y(top_left_y as f32); window.set_obj2_visible(true); window.set_obj2_selected(is_selected); }
@@ -549,56 +547,72 @@ fn render_all(window: &MainWindow, proj: &RucdProject, selected_id: Option<&str>
             5 => { window.set_obj6_id(obj.id.clone().into()); window.set_obj6_name(obj.name.clone().into()); window.set_obj6_type(obj.type_name.clone().into()); window.set_obj6_center_x(top_left_x as f32); window.set_obj6_center_y(top_left_y as f32); window.set_obj6_visible(true); window.set_obj6_selected(is_selected); }
             6 => { window.set_obj7_id(obj.id.clone().into()); window.set_obj7_name(obj.name.clone().into()); window.set_obj7_type(obj.type_name.clone().into()); window.set_obj7_center_x(top_left_x as f32); window.set_obj7_center_y(top_left_y as f32); window.set_obj7_visible(true); window.set_obj7_selected(is_selected); }
             7 => { window.set_obj8_id(obj.id.clone().into()); window.set_obj8_name(obj.name.clone().into()); window.set_obj8_type(obj.type_name.clone().into()); window.set_obj8_center_x(top_left_x as f32); window.set_obj8_center_y(top_left_y as f32); window.set_obj8_visible(true); window.set_obj8_selected(is_selected); }
-            8 => { window.set_obj9_id(obj.id.clone().into()); window.set_obj9_name(obj.name.clone().into()); window.set_obj9_type(obj.type_name.clone().into()); window.set_obj9_center_x(top_left_x as f32); window.set_obj9_center_y(top_left_y as f32); window.set_obj9_visible(true); window.set_obj9_selected(is_selected); }
+            8 => { window.set_obj9_id(obj.id.clone().into()); window.set_obj9_name(obj.name.clone().into()); window.set_obj9_center_x(top_left_x as f32); window.set_obj9_center_y(top_left_y as f32); window.set_obj9_visible(true); window.set_obj9_selected(is_selected); }
             9 => { window.set_obj10_id(obj.id.clone().into()); window.set_obj10_name(obj.name.clone().into()); window.set_obj10_type(obj.type_name.clone().into()); window.set_obj10_center_x(top_left_x as f32); window.set_obj10_center_y(top_left_y as f32); window.set_obj10_visible(true); window.set_obj10_selected(is_selected); }
             _ => {}
         }
     }
-    
+
     // Render associations (drawn BEFORE objects so they appear behind)
     for (i, assoc) in proj.associations.iter().take(5).enumerate() {
-        if let Some((src, tgt)) = find_association_endpoints(proj, assoc) {
+	if let Some((src, tgt)) = find_association_endpoints(proj, assoc) {
             let dx = tgt.0 - src.0;
             let dy = tgt.1 - src.1;
             let length = ((dx * dx) + (dy * dy)).sqrt();
             let angle = dy.atan2(dx);
-            let angle_deg = angle.to_degrees() as f32;
-            
-            // Use midpoint instead of start point
+            let base_angle_deg = angle.to_degrees() as f32;
+
             let mid_x = (src.0 + tgt.0) / 2.0;
             let mid_y = (src.1 + tgt.1) / 2.0;
-            
-            match i {
-                0 => { window.set_assoc1_x(mid_x as f32); window.set_assoc1_y(mid_y as f32); window.set_assoc1_len(length as f32); window.set_assoc1_angle(angle_deg as f32); window.set_assoc1_visible(true); }
-                1 => { window.set_assoc2_x(mid_x as f32); window.set_assoc2_y(mid_y as f32); window.set_assoc2_len(length as f32); window.set_assoc2_angle(angle_deg as f32); window.set_assoc2_visible(true); }
-                2 => { window.set_assoc3_x(mid_x as f32); window.set_assoc3_y(mid_y as f32); window.set_assoc3_len(length as f32); window.set_assoc3_angle(angle_deg as f32); window.set_assoc3_visible(true); }
-                3 => { window.set_assoc4_x(mid_x as f32); window.set_assoc4_y(mid_y as f32); window.set_assoc4_len(length as f32); window.set_assoc4_angle(angle_deg as f32); window.set_assoc4_visible(true); }
-                4 => { window.set_assoc5_x(mid_x as f32); window.set_assoc5_y(mid_y as f32); window.set_assoc5_len(length as f32); window.set_assoc5_angle(angle_deg as f32); window.set_assoc5_visible(true); }
-                _ => {}
+
+            let mut top_label_x = mid_x;
+            let mut top_label_y = mid_y;
+            if length > 0.0 {
+		let msgs_on_assoc: Vec<&Message> = proj.messages.iter()
+                    .filter(|m| m.association_id == assoc.id)
+                    .collect();
+		let n = msgs_on_assoc.len();
+		
+		let perp_x = -dy / length;
+		let perp_y = dx / length;
+		
+		let spacing = 18.0;
+		let msg_stack_half_extent = if n > 0 { ((n as f64 - 1.0) / 2.0) * spacing } else { 0.0 };
+		let yellow_offset_mag = msg_stack_half_extent + spacing;
+		
+		// Always place yellow box on the same side as the first message (index 0)
+		// The first message is at: mid + perp * (0 - (n-1)/2) * spacing
+		// which simplifies to: mid - perp * positive_value
+		// So we place the yellow box at: mid - perp * yellow_offset_mag
+		top_label_x = mid_x - perp_x * yellow_offset_mag;
+		top_label_y = mid_y - perp_y * yellow_offset_mag;
             }
-        }
+
+            match i {
+		0 => { window.set_assoc1_x(mid_x as f32); window.set_assoc1_y(mid_y as f32); window.set_assoc1_len(length as f32); window.set_assoc1_angle(base_angle_deg as f32); window.set_assoc1_visible(true); window.set_assoc1_top_label_x(top_label_x as f32); window.set_assoc1_top_label_y(top_label_y as f32); }
+		1 => { window.set_assoc2_x(mid_x as f32); window.set_assoc2_y(mid_y as f32); window.set_assoc2_len(length as f32); window.set_assoc2_angle(base_angle_deg as f32); window.set_assoc2_visible(true); window.set_assoc2_top_label_x(top_label_x as f32); window.set_assoc2_top_label_y(top_label_y as f32); }
+		2 => { window.set_assoc3_x(mid_x as f32); window.set_assoc3_y(mid_y as f32); window.set_assoc3_len(length as f32); window.set_assoc3_angle(base_angle_deg as f32); window.set_assoc3_visible(true); window.set_assoc3_top_label_x(top_label_x as f32); window.set_assoc3_top_label_y(top_label_y as f32); }
+		3 => { window.set_assoc4_x(mid_x as f32); window.set_assoc4_y(mid_y as f32); window.set_assoc4_len(length as f32); window.set_assoc4_angle(base_angle_deg as f32); window.set_assoc4_visible(true); window.set_assoc4_top_label_x(top_label_x as f32); window.set_assoc4_top_label_y(top_label_y as f32); }
+		4 => { window.set_assoc5_x(mid_x as f32); window.set_assoc5_y(mid_y as f32); window.set_assoc5_len(length as f32); window.set_assoc5_angle(base_angle_deg as f32); window.set_assoc5_visible(true); window.set_assoc5_top_label_x(top_label_x as f32); window.set_assoc5_top_label_y(top_label_y as f32); }
+		_ => {}
+            }
+	}
     }
     
     // Render messages (positioned along their association lines)
-    // Group messages by association and position them along the line
     for (i, msg) in proj.messages.iter().take(9).enumerate() {
-        // Find the association this message belongs to
         if let Some(assoc) = proj.associations.iter().find(|a| a.id == msg.association_id) {
             if let Some((src, tgt)) = find_association_endpoints(proj, assoc) {
-                // Calculate angle of the ASSOCIATION line
                 let dx = tgt.0 - src.0;
                 let dy = tgt.1 - src.1;
                 let length = ((dx * dx) + (dy * dy)).sqrt();
                 
-                // Determine direction: forward (src->tgt) or reversed (tgt->src)
                 let is_reversed = msg.source_object_id == assoc.target_id;
                 
-                // Angle for the text/arrow: rotate 180° if reversed
                 let base_angle = dy.atan2(dx);
                 let final_angle = if is_reversed { base_angle + std::f64::consts::PI } else { base_angle };
                 let angle_deg = final_angle.to_degrees() as f32;
                 
-                // Find which message index this is within its association
                 let msgs_on_assoc: Vec<_> = proj.messages.iter()
                     .filter(|m| m.association_id == msg.association_id)
                     .collect();
@@ -607,12 +621,9 @@ fn render_all(window: &MainWindow, proj: &RucdProject, selected_id: Option<&str>
                     .position(|m| m.id == msg.id)
                     .unwrap_or(0) as f64;
                 
-                // Center messages at midpoint of association line
                 let mid_x = (src.0 + tgt.0) / 2.0;
                 let mid_y = (src.1 + tgt.1) / 2.0;
                 
-                // Offset perpendicular: center the GROUP on the midpoint
-                // For 3 msgs (indices 0,1,2): offsets = -1,0,+1
                 let spacing = 18.0;
                 let center_offset = (msg_index - (msg_count - 1.0) / 2.0) * spacing;
                 let perp_x = -dy / length * center_offset;
@@ -714,7 +725,7 @@ fn find_association_endpoints(proj: &RucdProject, assoc: &Association) -> Option
 fn layout_objects_internal(project: &Rc<RefCell<RucdProject>>) {
     let mut proj_mut = project.borrow_mut();
     if proj_mut.objects.is_empty() {
-        println!("rust-side: ⚠ No objects to layout");
+        println!("rust-side:  No objects to layout");
         return;
     }
     
