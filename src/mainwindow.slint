@@ -4,7 +4,7 @@ import { Button } from "std-widgets.slint";
 component MenuButton inherits Rectangle {
     in property <string> label: "";
     callback clicked;
-    
+
     // Auto-size width based on text content + padding
     width: txt.preferred_width + 24px;
     height: 30px;
@@ -212,7 +212,7 @@ component YellowDebugRect inherits Rectangle {
             border-width: 1px;
             border-color: black;
             visible: yd_visible;
-            
+
             Text {
                 x: 0px;
                 y: 0px;
@@ -230,125 +230,380 @@ component YellowDebugRect inherits Rectangle {
     }
 }
 
-component TypeSelectorDialog inherits Rectangle {
-    in-out property <bool> visible_dialog: false;
-    in-out property <string> selected_type: "";
-    in-out property <string> object_name: "";
-    in-out property <int> ingested_types_count: 0;
-
-    in-out property <string> type1_name: "";
-    in-out property <string> type2_name: "";
-    in-out property <string> type3_name: "";
-    in-out property <string> type4_name: "";
-
-    callback confirm;
-    callback cancel;
-    callback type1_selected;
-    callback type2_selected;
-    callback type3_selected;
-    callback type4_selected;
+component DuckTypeWizard inherits Rectangle {
+    // Wizard state
+    in-out property <bool> visible_wizard: false;
+    in-out property <int> current_step: 0;  // 0=type, 1=fields, 2=services, 3=name
+    
+    // Step 1: Type selection/input
+    in-out property <string> type_input: "";
+    in-out property <bool> has_ingested_types: false;
+    in-out property <string> ingested_type1: "";
+    in-out property <string> ingested_type2: "";
+    in-out property <string> ingested_type3: "";
+    in-out property <string> ingested_type4: "";
+    in-out property <string> selected_ingested_type: "";
+    
+    // Step 2: Fields
+    in-out property <string> fields_input: "";
+    
+    // Step 3: Services
+    in-out property <string> services_input: "";
+    
+    // Step 4: Instantiation name
+    in-out property <string> instantiation_name_input: "";
+    
+    // Callbacks
+    callback previous_step;
+    callback next_step;
+    callback cancel_wizard;
+    callback create_duck_type;
+    callback select_ingested_type1;
+    callback select_ingested_type2;
+    callback select_ingested_type3;
+    callback select_ingested_type4;
 
     x: 0px;
     y: 0px;
     width: 1200px;
     height: 750px;
     background: rgba(0, 0, 0, 100);
-    visible: visible_dialog;
+    visible: visible_wizard;
 
+    // Modal dialog box
     Rectangle {
-        x: (parent.width - 400px) / 2;
-        y: (parent.height - 300px) / 2;
-        width: 400px;
-        height: 300px;
+        x: (parent.width - 500px) / 2;
+        y: (parent.height - 400px) / 2;
+        width: 500px;
+        height: 400px;
         background: white;
         border-width: 2px;
         border-color: #1976d2;
         border-radius: 8px;
 
+        // Title
         Text {
-            x: 15px;
-            y: 15px;
-            text: "Add Object";
+            x: 20px;
+            y: 20px;
+            text: "Create Duck-Type (Step " + (current_step + 1) + " of 4)";
             font-family: "Atkinson Hyperlegible Mono";
             font-size: 18px;
             font-weight: 700;
+            color: #212121;
         }
 
-        Text {
-            x: 15px;
-            y: 50px;
-            text: "Select Type:";
-            font-family: "Atkinson Hyperlegible Mono";
-            font-size: 14px;
-            font-weight: 400;
-        }
-
+        // Step 1: Type Selection/Input
         Rectangle {
-            x: 15px;
-            y: 75px;
-            width: 370px;
-            height: 120px;
-            background: white;
-            border-width: 1px;
-            border-color: #1976d2;
-            border-radius: 4px;
-            clip: true;
+            visible: current_step == 0;
+            x: 20px;
+            y: 60px;
+            width: 460px;
+            height: 280px;
+
+            Text {
+                x: 0px;
+                y: 0px;
+                text: "Select existing type (if available):";
+                font-family: "Atkinson Hyperlegible Mono";
+                font-size: 13px;
+                font-weight: 400;
+                color: #424242;
+            }
 
             Rectangle {
-                x: 5px; y: 5px; width: 360px; height: 32px;
-                background: selected_type == type1_name && type1_name != "" ? #1976d2 : transparent;
+                x: 0px;
+                y: 25px;
+                width: 460px;
+                height: 120px;
+                background: #f5f5f5;
+                border-width: 1px;
+                border-color: #bdbdbd;
                 border-radius: 4px;
-                visible: type1_name != "";
-                Text { x: 10px; y: 8px; text: type1_name; font-family: "Atkinson Hyperlegible Mono"; color: selected_type == type1_name ? white : black; font-size: 13px; font-weight: 400; }
-                TouchArea { clicked => { type1_selected(); } }
+                clip: true;
+
+                Rectangle {
+                    x: 5px; y: 5px; width: 450px; height: 28px;
+                    background: selected_ingested_type == ingested_type1 && ingested_type1 != "" ? #1976d2 : transparent;
+                    border-radius: 4px;
+                    visible: ingested_type1 != "";
+                    Text { x: 10px; y: 6px; text: ingested_type1; font-family: "Atkinson Hyperlegible Mono"; color: selected_ingested_type == ingested_type1 ? white : black; font-size: 13px; }
+                    TouchArea { clicked => { select_ingested_type1(); } }
+                }
+                Rectangle {
+                    x: 5px; y: 35px; width: 450px; height: 28px;
+                    background: selected_ingested_type == ingested_type2 && ingested_type2 != "" ? #1976d2 : transparent;
+                    border-radius: 4px;
+                    visible: ingested_type2 != "";
+                    Text { x: 10px; y: 6px; text: ingested_type2; font-family: "Atkinson Hyperlegible Mono"; color: selected_ingested_type == ingested_type2 ? white : black; font-size: 13px; }
+                    TouchArea { clicked => { select_ingested_type2(); } }
+                }
+                Rectangle {
+                    x: 5px; y: 65px; width: 450px; height: 28px;
+                    background: selected_ingested_type == ingested_type3 && ingested_type3 != "" ? #1976d2 : transparent;
+                    border-radius: 4px;
+                    visible: ingested_type3 != "";
+                    Text { x: 10px; y: 6px; text: ingested_type3; font-family: "Atkinson Hyperlegible Mono"; color: selected_ingested_type == ingested_type3 ? white : black; font-size: 13px; }
+                    TouchArea { clicked => { select_ingested_type3(); } }
+                }
+                Rectangle {
+                    x: 5px; y: 95px; width: 450px; height: 28px;
+                    background: selected_ingested_type == ingested_type4 && ingested_type4 != "" ? #1976d2 : transparent;
+                    border-radius: 4px;
+                    visible: ingested_type4 != "";
+                    Text { x: 10px; y: 6px; text: ingested_type4; font-family: "Atkinson Hyperlegible Mono"; color: selected_ingested_type == ingested_type4 ? white : black; font-size: 13px; }
+                    TouchArea { clicked => { select_ingested_type4(); } }
+                }
             }
-            Rectangle {
-                x: 5px; y: 39px; width: 360px; height: 32px;
-                background: selected_type == type2_name && type2_name != "" ? #1976d2 : transparent;
-                border-radius: 4px;
-                visible: type2_name != "";
-                Text { x: 10px; y: 8px; text: type2_name; font-family: "Atkinson Hyperlegible Mono"; color: selected_type == type2_name ? white : black; font-size: 13px; font-weight: 400; }
-                TouchArea { clicked => { type2_selected(); } }
+
+            Text {
+                x: 0px;
+                y: 155px;
+                text: "OR enter new type name:";
+                font-family: "Atkinson Hyperlegible Mono";
+                font-size: 13px;
+                font-weight: 400;
+                color: #424242;
             }
+
             Rectangle {
-                x: 5px; y: 73px; width: 360px; height: 32px;
-                background: selected_type == type3_name && type3_name != "" ? #1976d2 : transparent;
+                x: 0px;
+                y: 180px;
+                width: 460px;
+                height: 35px;
+                background: white;
+                border-width: 1px;
+                border-color: #1976d2;
                 border-radius: 4px;
-                visible: type3_name != "";
-                Text { x: 10px; y: 8px; text: type3_name; font-family: "Atkinson Hyperlegible Mono"; color: selected_type == type3_name ? white : black; font-size: 13px; font-weight: 400; }
-                TouchArea { clicked => { type3_selected(); } }
-            }
-            Rectangle {
-                x: 5px; y: 107px; width: 360px; height: 32px;
-                background: selected_type == type4_name && type4_name != "" ? #1976d2 : transparent;
-                border-radius: 4px;
-                visible: type4_name != "";
-                Text { x: 10px; y: 8px; text: type4_name; font-family: "Atkinson Hyperlegible Mono"; color: selected_type == type4_name ? white : black; font-size: 13px; font-weight: 400; }
-                TouchArea { clicked => { type4_selected(); } }
+
+                TextInput {
+                    x: 10px;
+                    y: 8px;
+                    width: 440px;
+                    height: 20px;
+                    text <=> type_input;
+                    font-family: "Atkinson Hyperlegible Mono";
+                    font-size: 14px;
+                }
             }
         }
 
-        Text {
-            x: 15px;
-            y: 210px;
-            text: "Object will be auto-named (type: name)";
-            font-family: "Atkinson Hyperlegible Mono";
-            font-size: 12px;
-            font-weight: 400;
-            color: gray;
+        // Step 2: Fields Input
+        Rectangle {
+            visible: current_step == 1;
+            x: 20px;
+            y: 60px;
+            width: 460px;
+            height: 280px;
+
+            Text {
+                x: 0px;
+                y: 0px;
+                text: "Enter field names (comma-separated):";
+                font-family: "Atkinson Hyperlegible Mono";
+                font-size: 14px;
+                font-weight: 400;
+                color: #424242;
+            }
+
+            Text {
+                x: 0px;
+                y: 25px;
+                text: "Example: host, port, timeout, max_connections";
+                font-family: "Atkinson Hyperlegible Mono";
+                font-size: 12px;
+                font-weight: 400;
+                color: #757575;
+            }
+
+            Rectangle {
+                x: 0px;
+                y: 55px;
+                width: 460px;
+                height: 100px;
+                background: white;
+                border-width: 1px;
+                border-color: #1976d2;
+                border-radius: 4px;
+
+                TextInput {
+                    x: 10px;
+                    y: 10px;
+                    width: 440px;
+                    height: 80px;
+                    text <=> fields_input;
+                    font-family: "Atkinson Hyperlegible Mono";
+                    font-size: 14px;
+                }
+            }
+
+            Text {
+                x: 0px;
+                y: 165px;
+                text: "Leave empty if this type has no fields.";
+                font-family: "Atkinson Hyperlegible Mono";
+                font-size: 12px;
+                font-weight: 400;
+                color: #757575;
+            }
         }
 
+        // Step 3: Services Input
+        Rectangle {
+            visible: current_step == 2;
+            x: 20px;
+            y: 60px;
+            width: 460px;
+            height: 280px;
+
+            Text {
+                x: 0px;
+                y: 0px;
+                text: "Enter service names (comma-separated):";
+                font-family: "Atkinson Hyperlegible Mono";
+                font-size: 14px;
+                font-weight: 400;
+                color: #424242;
+            }
+
+            Text {
+                x: 0px;
+                y: 25px;
+                text: "Example: connect, disconnect, query, insert, update";
+                font-family: "Atkinson Hyperlegible Mono";
+                font-size: 12px;
+                font-weight: 400;
+                color: #757575;
+            }
+
+            Rectangle {
+                x: 0px;
+                y: 55px;
+                width: 460px;
+                height: 100px;
+                background: white;
+                border-width: 1px;
+                border-color: #1976d2;
+                border-radius: 4px;
+
+                TextInput {
+                    x: 10px;
+                    y: 10px;
+                    width: 440px;
+                    height: 80px;
+                    text <=> services_input;
+                    font-family: "Atkinson Hyperlegible Mono";
+                    font-size: 14px;
+                }
+            }
+
+            Text {
+                x: 0px;
+                y: 165px;
+                text: "Leave empty if this type has no services.";
+                font-family: "Atkinson Hyperlegible Mono";
+                font-size: 12px;
+                font-weight: 400;
+                color: #757575;
+            }
+        }
+
+        // Step 4: Instantiation Name Input
+        Rectangle {
+            visible: current_step == 3;
+            x: 20px;
+            y: 60px;
+            width: 460px;
+            height: 280px;
+
+            Text {
+                x: 0px;
+                y: 0px;
+                text: "Enter unique instantiation name:";
+                font-family: "Atkinson Hyperlegible Mono";
+                font-size: 14px;
+                font-weight: 400;
+                color: #424242;
+            }
+
+            Text {
+                x: 0px;
+                y: 25px;
+                text: "This is the runtime handle other duck-types use when calling services.";
+                font-family: "Atkinson Hyperlegible Mono";
+                font-size: 12px;
+                font-weight: 400;
+                color: #757575;
+            }
+
+            Text {
+                x: 0px;
+                y: 45px;
+                text: "Example: my_app, db_primary, cache_layer_1";
+                font-family: "Atkinson Hyperlegible Mono";
+                font-size: 12px;
+                font-weight: 400;
+                color: #757575;
+            }
+
+            Rectangle {
+                x: 0px;
+                y: 75px;
+                width: 460px;
+                height: 35px;
+                background: white;
+                border-width: 1px;
+                border-color: #1976d2;
+                border-radius: 4px;
+
+                TextInput {
+                    x: 10px;
+                    y: 8px;
+                    width: 440px;
+                    height: 20px;
+                    text <=> instantiation_name_input;
+                    font-family: "Atkinson Hyperlegible Mono";
+                    font-size: 14px;
+                }
+            }
+
+            Text {
+                x: 0px;
+                y: 120px;
+                text: "Must be unique across all duck-types in this diagram.";
+                font-family: "Atkinson Hyperlegible Mono";
+                font-size: 12px;
+                font-weight: 400;
+                color: #d32f2f;
+            }
+        }
+
+        // Navigation buttons
         Button {
-            x: 190px;
-            y: 280px;
+            x: 20px;
+            y: 350px;
             text: "Cancel";
-            clicked => { cancel(); }
+            clicked => { cancel_wizard(); }
         }
+
         Button {
-            x: 290px;
-            y: 280px;
-            text: "Add";
-            clicked => { confirm(); }
+            x: 280px;
+            y: 350px;
+            text: current_step > 0 ? "Previous" : "";
+            visible: current_step > 0;
+            clicked => { previous_step(); }
+        }
+
+        Button {
+            x: 380px;
+            y: 350px;
+            text: current_step < 3 ? "Next" : "Create";
+            clicked => { 
+                if current_step < 3 {
+                    next_step();
+                } else {
+                    create_duck_type();
+                }
+            }
         }
     }
 }
@@ -361,6 +616,8 @@ export component MainWindow inherits Window {
     callback new_project;
     callback open_project;
     callback save_project;
+    callback undo_action;
+    callback redo_action;
     callback add_object;
     callback start_association;
     callback add_message;
@@ -378,6 +635,8 @@ export component MainWindow inherits Window {
     callback association_clicked(string);
     callback association_line_clicked(string);
     callback endpoints;
+    callback wizard_previous_step;
+    callback wizard_next_step;
 
     in-out property <length> toolbar_height: 50px;
     in-out property <length> properties_width: 320px;
@@ -395,6 +654,11 @@ export component MainWindow inherits Window {
     in-out property <bool> show_type_dialog: false;
     in-out property <string> dialog_selected_type: "";
     in-out property <string> dialog_object_name: "";
+    in-out property <int> dialog_current_step: 0;
+    in-out property <string> dialog_type_input: "";
+    in-out property <string> dialog_fields_input: "";
+    in-out property <string> dialog_services_input: "";
+    in-out property <string> dialog_instantiation_name: "";
     in-out property <int> ingested_types_count: 0;
     in-out property <string> type_selector_type1: "";
     in-out property <string> type_selector_type2: "";
@@ -417,15 +681,17 @@ export component MainWindow inherits Window {
     Rectangle {
         x: 0px; y: 0px; width: root.width - properties_width; height: toolbar_height;
         background: #f5f5f5;
-        
+
         HorizontalLayout {
             padding: 10px;
             spacing: 10px;
             alignment: start;
-            
+
             MenuButton { label: "New"; clicked => { new_project(); } }
             MenuButton { label: "Open"; clicked => { open_project(); } }
             MenuButton { label: "Save"; clicked => { save_project(); } }
+            MenuButton { label: "Undo"; clicked => { undo_action(); } }
+            MenuButton { label: "Redo"; clicked => { redo_action(); } }
             MenuButton { label: "+Object"; clicked => { add_object(); } }
             MenuButton { label: "Association"; clicked => { start_association(); } }
             MenuButton { label: "Message"; clicked => { add_message(); } }
@@ -492,20 +758,28 @@ export component MainWindow inherits Window {
         Text { x: 15px; y: 140px; text: "Note: Yellow boxes show association angles"; font-family: "Atkinson Hyperlegible Mono"; font-size: 11px; font-weight: 400; color: #757575; }
     }
 
-    TypeSelectorDialog {
-        visible_dialog: show_type_dialog;
-        selected_type: dialog_selected_type;
-        object_name: dialog_object_name;
-        type1_name: type_selector_type1;
-        type2_name: type_selector_type2;
-        type3_name: type_selector_type3;
-        type4_name: type_selector_type4;
-        confirm => { dialog_confirmed(); }
-        cancel => { dialog_cancelled(); }
-        type1_selected => { type1_clicked(); }
-        type2_selected => { type2_clicked(); }
-        type3_selected => { type3_clicked(); }
-        type4_selected => { type4_clicked(); }
+    DuckTypeWizard {
+        visible_wizard: show_type_dialog;
+        current_step <=> dialog_current_step;
+        type_input <=> dialog_type_input;
+        has_ingested_types: ingested_types_count > 0;
+        ingested_type1: type_selector_type1;
+        ingested_type2: type_selector_type2;
+        ingested_type3: type_selector_type3;
+        ingested_type4: type_selector_type4;
+        selected_ingested_type <=> dialog_selected_type;
+        fields_input <=> dialog_fields_input;
+        services_input <=> dialog_services_input;
+        instantiation_name_input <=> dialog_instantiation_name;
+
+        previous_step => { wizard_previous_step(); }
+        next_step => { wizard_next_step(); }
+        cancel_wizard => { dialog_cancelled(); }
+        create_duck_type => { dialog_confirmed(); }
+        select_ingested_type1 => { type1_clicked(); }
+        select_ingested_type2 => { type2_clicked(); }
+        select_ingested_type3 => { type3_clicked(); }
+        select_ingested_type4 => { type4_clicked(); }
     }
 
     property <string> dialog_internal_type: "";

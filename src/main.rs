@@ -15,6 +15,7 @@ fn main() {
     
     // Application state
     let project = Rc::new(RefCell::new(RucdProject::new("Untitled")));
+    let history = Rc::new(RefCell::new(rs_dma_lib::history::History::new()));
     let selected_obj_id = Rc::new(RefCell::new(Option::<String>::None));
     let assoc_source_id = Rc::new(RefCell::new(None::<String>));
     let ingested_types = Rc::new(RefCell::new(Vec::<RustType>::new()));
@@ -82,6 +83,128 @@ fn main() {
         }
     });
 
+    // === UNDO ===
+    let hist_undo = history.clone();
+    let proj_undo = project.clone();
+    let sel_undo = selected_obj_id.clone();
+    let win_undo = main_window.clone_strong();
+    main_window.on_undo_action(move || {
+	let mut hist = hist_undo.borrow_mut();
+	if let Some(action) = hist.undo() {
+            let mut proj = proj_undo.borrow_mut();
+            match action {
+		rs_dma_lib::history::Action::CreateDuckType(obj) => {
+                    proj.objects.retain(|o| o.id != obj.id);
+                    println!("rust-side: ✓ Undo: removed duck-type {}", obj.id);
+		}
+		rs_dma_lib::history::Action::DeleteDuckType { object, removed_associations, removed_messages } => {
+                    proj.objects.push(object);
+                    proj.associations.extend(removed_associations);
+                    proj.messages.extend(removed_messages);
+                    println!("rust-side: ✓ Undo: restored duck-type");
+		}
+		rs_dma_lib::history::Action::CreateAssociation(assoc) => {
+                    proj.associations.retain(|a| a.id != assoc.id);
+                    println!("rust-side: ✓ Undo: removed association {}", assoc.id);
+		}
+		rs_dma_lib::history::Action::DeleteAssociation(assoc) => {
+                    proj.associations.push(assoc);
+                    println!("rust-side: ✓ Undo: restored association");
+		}
+		rs_dma_lib::history::Action::CreateMessage(msg) => {
+                    proj.messages.retain(|m| m.id != msg.id);
+                    println!("rust-side: ✓ Undo: removed message {}", msg.id);
+		}
+		rs_dma_lib::history::Action::DeleteMessage(msg) => {
+                    proj.messages.push(msg);
+                    println!("rust-side: ✓ Undo: restored message");
+		}
+		rs_dma_lib::history::Action::MoveDuckType { id, old_x, old_y, .. } => {
+                    if let Some(obj) = proj.objects.iter_mut().find(|o| o.id == id) {
+			obj.x = old_x;
+			obj.y = old_y;
+			println!("rust-side: ✓ Undo: moved duck-type {} back", id);
+                    }
+		}
+		rs_dma_lib::history::Action::UpdateDuckType { id, old_object, .. } => {
+                    if let Some(obj) = proj.objects.iter_mut().find(|o| o.id == id) {
+			*obj = old_object;
+			println!("rust-side: ✓ Undo: restored duck-type {}", id);
+                    }
+		}
+		rs_dma_lib::history::Action::UpdateMessage { id, old_message, .. } => {
+                    if let Some(msg) = proj.messages.iter_mut().find(|m| m.id == id) {
+			*msg = old_message;
+			println!("rust-side: ✓ Undo: restored message {}", id);
+                    }
+		}
+            }
+            drop(proj);
+            *sel_undo.borrow_mut() = None;
+            render_all(&win_undo, &*proj_undo.borrow(), None);
+	}
+    });
+
+    // === REDO ===
+    let hist_redo = history.clone();
+    let proj_redo = project.clone();
+    let sel_redo = selected_obj_id.clone();
+    let win_redo = main_window.clone_strong();
+    main_window.on_redo_action(move || {
+	let mut hist = hist_redo.borrow_mut();
+	if let Some(action) = hist.redo() {
+            let mut proj = proj_redo.borrow_mut();
+            match action {
+		rs_dma_lib::history::Action::CreateDuckType(obj) => {
+                    proj.objects.push(obj);
+                    println!("rust-side: ✓ Redo: restored duck-type");
+		}
+		rs_dma_lib::history::Action::DeleteDuckType { object, .. } => {
+                    proj.objects.retain(|o| o.id != object.id);
+                    println!("rust-side: ✓ Redo: removed duck-type {}", object.id);
+		}
+		rs_dma_lib::history::Action::CreateAssociation(assoc) => {
+                    proj.associations.push(assoc);
+                    println!("rust-side: ✓ Redo: restored association");
+		}
+		rs_dma_lib::history::Action::DeleteAssociation(assoc) => {
+                    proj.associations.retain(|a| a.id != assoc.id);
+                    println!("rust-side: ✓ Redo: removed association {}", assoc.id);
+		}
+		rs_dma_lib::history::Action::CreateMessage(msg) => {
+                    proj.messages.push(msg);
+                    println!("rust-side: ✓ Redo: restored message");
+		}
+		rs_dma_lib::history::Action::DeleteMessage(msg) => {
+                    proj.messages.retain(|m| m.id != msg.id);
+                    println!("rust-side: ✓ Redo: removed message {}", msg.id);
+		}
+		rs_dma_lib::history::Action::MoveDuckType { id, new_x, new_y, .. } => {
+                    if let Some(obj) = proj.objects.iter_mut().find(|o| o.id == id) {
+			obj.x = new_x;
+			obj.y = new_y;
+			println!("rust-side: ✓ Redo: moved duck-type {} forward", id);
+                    }
+		}
+		rs_dma_lib::history::Action::UpdateDuckType { id, new_object, .. } => {
+                    if let Some(obj) = proj.objects.iter_mut().find(|o| o.id == id) {
+			*obj = new_object;
+			println!("rust-side: ✓ Redo: updated duck-type {}", id);
+                    }
+		}
+		rs_dma_lib::history::Action::UpdateMessage { id, new_message, .. } => {
+                    if let Some(msg) = proj.messages.iter_mut().find(|m| m.id == id) {
+			*msg = new_message;
+			println!("rust-side: ✓ Redo: updated message {}", id);
+                    }
+		}
+            }
+            drop(proj);
+            *sel_redo.borrow_mut() = None;
+            render_all(&win_redo, &*proj_redo.borrow(), None);
+	}
+    });    
+
     // === INGEST RUST DIRECTORY ===
     let proj4 = project.clone();
     let types4 = ingested_types.clone();
@@ -111,138 +234,184 @@ fn main() {
         }
     });
 
-    // === ADD OBJECT (from ingested types with dialog) ===
-    let proj5 = project.clone();
-    let types5a = ingested_types.clone();
-    let types5b = ingested_types.clone();
-    let sel5 = selected_obj_id.clone();
-    let win5a1 = main_window.clone_strong();
-    let win5a2 = main_window.clone_strong();
-    let win5a3 = main_window.clone_strong();
-    let win5a4a = main_window.clone_strong();
-    let win5a4b = main_window.clone_strong();
-    let win5a5 = main_window.clone_strong();
-    let win5b = main_window.clone_strong();
-    let proj5b = project.clone();
-    
+    // === ADD OBJECT (Open 4-Step Wizard) ===
+    let win_add = main_window.clone_strong();
+    let types_add = ingested_types.clone();
     main_window.on_add_object(move || {
-        let types_borrow = types5a.borrow();
-        if types_borrow.is_empty() {
-            println!("rust-side: ⚠ No types ingested. Click 'Ingest Rust' first.");
-            return;
-        }
-        
-        // Populate type list (up to 4 visible in dialog)
-        let type1 = types_borrow.get(0).map(|t| t.name.as_str()).unwrap_or("");
-        let type2 = types_borrow.get(1).map(|t| t.name.as_str()).unwrap_or("");
-        let type3 = types_borrow.get(2).map(|t| t.name.as_str()).unwrap_or("");
-        let type4 = types_borrow.get(3).map(|t| t.name.as_str()).unwrap_or("");
-        
-        win5a1.set_dialog_selected_type(type1.into());
-        win5a1.set_dialog_object_name("".into());
-        win5a1.set_ingested_types_count(types_borrow.len() as i32);
-        win5a1.set_type_selector_type1(type1.into());
-        win5a1.set_type_selector_type2(type2.into());
-        win5a1.set_type_selector_type3(type3.into());
-        win5a1.set_type_selector_type4(type4.into());
-        win5a1.set_show_type_dialog(true);
-        println!("rust-side: → Add Object dialog opened ({} types)", types_borrow.len());
+	let types_borrow = types_add.borrow();
+	
+	let type1 = types_borrow.get(0).map(|t| t.name.as_str()).unwrap_or("");
+	let type2 = types_borrow.get(1).map(|t| t.name.as_str()).unwrap_or("");
+	let type3 = types_borrow.get(2).map(|t| t.name.as_str()).unwrap_or("");
+	let type4 = types_borrow.get(3).map(|t| t.name.as_str()).unwrap_or("");
+
+	// Reset wizard state to Step 1
+	win_add.set_dialog_selected_type(if type1.is_empty() { "".into() } else { type1.into() });
+	win_add.set_dialog_type_input("".into());
+	win_add.set_dialog_fields_input("".into());
+	win_add.set_dialog_services_input("".into());
+	win_add.set_dialog_instantiation_name("".into());
+	win_add.set_dialog_current_step(0);
+	
+	win_add.set_ingested_types_count(types_borrow.len() as i32);
+	win_add.set_type_selector_type1(type1.into());
+	win_add.set_type_selector_type2(type2.into());
+	win_add.set_type_selector_type3(type3.into());
+	win_add.set_type_selector_type4(type4.into());
+	
+	win_add.set_show_type_dialog(true);
+	println!("rust-side: → Duck-Type wizard opened ({} ingested types available)", types_borrow.len());
     });
-    
-    // Type selection callbacks
-    let types_for_t1 = ingested_types.clone();
-    let types_for_t2 = ingested_types.clone();
-    let types_for_t3 = ingested_types.clone();
-    let types_for_t4 = ingested_types.clone();
-    
+
+    // === WIZARD NAVIGATION ===
+    let win_prev = main_window.clone_strong();
+    main_window.on_wizard_previous_step(move || {
+	let current = win_prev.get_dialog_current_step();
+	if current > 0 {
+            win_prev.set_dialog_current_step(current - 1);
+	}
+    });
+
+    let win_next = main_window.clone_strong();
+    main_window.on_wizard_next_step(move || {
+	let current = win_next.get_dialog_current_step();
+	if current < 3 {
+            win_next.set_dialog_current_step(current + 1);
+	}
+    });
+
+    // === TYPE SELECTION (from ingested list) ===
+    let win_t1 = main_window.clone_strong();
+    let types_t1 = ingested_types.clone();
     main_window.on_type1_clicked(move || {
-        let types_borrow = types_for_t1.borrow();
-        if let Some(t) = types_borrow.get(0) {
-            win5a5.set_dialog_selected_type(t.name.clone().into());
-        }
+	if let Some(t) = types_t1.borrow().get(0) {
+            win_t1.set_dialog_selected_type(t.name.clone().into());
+	}
     });
+
+    let win_t2 = main_window.clone_strong();
+    let types_t2 = ingested_types.clone();
     main_window.on_type2_clicked(move || {
-        let types_borrow = types_for_t2.borrow();
-        if let Some(t) = types_borrow.get(1) {
-            win5a3.set_dialog_selected_type(t.name.clone().into());
-        }
+	if let Some(t) = types_t2.borrow().get(1) {
+            win_t2.set_dialog_selected_type(t.name.clone().into());
+	}
     });
+
+    let win_t3 = main_window.clone_strong();
+    let types_t3 = ingested_types.clone();
     main_window.on_type3_clicked(move || {
-        let types_borrow = types_for_t3.borrow();
-        if let Some(t) = types_borrow.get(2) {
-            win5a4a.set_dialog_selected_type(t.name.clone().into());
-        }
+	if let Some(t) = types_t3.borrow().get(2) {
+            win_t3.set_dialog_selected_type(t.name.clone().into());
+	}
     });
+
+    let win_t4 = main_window.clone_strong();
+    let types_t4 = ingested_types.clone();
     main_window.on_type4_clicked(move || {
-        let types_borrow = types_for_t4.borrow();
-        if let Some(t) = types_borrow.get(3) {
-            win5a4b.set_dialog_selected_type(t.name.clone().into());
-        }
+	if let Some(t) = types_t4.borrow().get(3) {
+            win_t4.set_dialog_selected_type(t.name.clone().into());
+	}
     });
-    
-    // Dialog confirmed - create the object
+
+    // === DIALOG CANCELLED ===
+    let win_cancel = main_window.clone_strong();
+    main_window.on_dialog_cancelled(move || {
+	win_cancel.set_show_type_dialog(false);
+	win_cancel.set_dialog_current_step(0);
+	win_cancel.set_dialog_type_input("".into());
+	win_cancel.set_dialog_fields_input("".into());
+	win_cancel.set_dialog_services_input("".into());
+	win_cancel.set_dialog_instantiation_name("".into());
+	win_cancel.set_dialog_selected_type("".into());
+	println!("rust-side: ✗ Duck-Type wizard cancelled");
+    });
+
+    // === DIALOG CONFIRMED (Create Duck-Type) ===
+    let win_confirm = main_window.clone_strong();
+    let proj_confirm = project.clone();
+    let hist_confirm = history.clone();
+    let sel_confirm = selected_obj_id.clone();
+
     main_window.on_dialog_confirmed(move || {
-        let type_name = win5b.get_dialog_selected_type().to_string();
-        let obj_name = win5b.get_dialog_object_name().to_string();
-        let types_borrow = types5b.borrow();
-        
-        if type_name.is_empty() {
-            println!("rust-side: ⚠ No type selected");
-            win5b.set_show_type_dialog(false);
+	let selected_type = win_confirm.get_dialog_selected_type().to_string();
+	let custom_type = win_confirm.get_dialog_type_input().to_string();
+	let fields_str = win_confirm.get_dialog_fields_input().to_string();
+	let services_str = win_confirm.get_dialog_services_input().to_string();
+	let inst_name = win_confirm.get_dialog_instantiation_name().to_string();
+
+	// Use custom type if provided, otherwise use selected ingested type
+	let final_type_name = if !custom_type.trim().is_empty() {
+            custom_type.trim().to_string()
+	} else if !selected_type.is_empty() {
+            selected_type
+	} else {
+            println!("rust-side: ⚠ No type selected or entered");
             return;
-        }
-        
-        // Find the type (use the selected type name)
-        let rust_type = types_borrow.iter()
-            .find(|t| t.name == type_name);
-        
-        if rust_type.is_none() {
-            println!("rust-side: ⚠ Type not found: {}", type_name);
-            win5b.set_show_type_dialog(false);
+	};
+
+	if inst_name.trim().is_empty() {
+            println!("rust-side: ⚠ Instantiation name is required");
             return;
-        }
-        
-        let rust_type = rust_type.unwrap();
-        
-        // Use user-provided name or auto-generate
-        let display_name = if obj_name.trim().is_empty() {
-            format!("{}: {}", rust_type.name.to_lowercase(), rust_type.name)
-        } else {
-            format!("{}: {}", obj_name.trim(), rust_type.name)
-        };
-        
-        let mut proj_mut = proj5b.borrow_mut();
-        let obj_num = proj_mut.objects.len() + 1;
-        let row = ((obj_num - 1) / 4) as f64;
-        let col = ((obj_num - 1) % 4) as f64;
-        
-        let obj = ObjectInstantiation {
+	}
+
+	// Parse comma-separated fields and services
+	let fields: Vec<String> = fields_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+	let services: Vec<String> = services_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+	let display_name = format!("{}: {}", inst_name.trim(), final_type_name);
+
+	let mut proj_mut = proj_confirm.borrow_mut();
+	let obj_num = proj_mut.objects.len() + 1;
+	let row = ((obj_num - 1) / 4) as f64;
+	let col = ((obj_num - 1) % 4) as f64;
+
+	let new_obj = ObjectInstantiation {
             id: format!("obj{}", obj_num),
             name: display_name,
-            type_name: rust_type.name.clone(),
-            is_trait: rust_type.is_trait,
+            type_name: final_type_name,
+            instantiation_name: inst_name.trim().to_string(),
+            fields,
+            services,
+            is_trait: false,
             x: 100.0 + (col * 200.0),
             y: 100.0 + (row * 150.0),
             width: 160.0,
             height: 90.0,
-        };
-        
-        println!("rust-side: ✓ Added object: {}", obj.name);
-        proj_mut.objects.push(obj);
-        drop(proj_mut);
-        
-        win5b.set_show_type_dialog(false);
-        
-        // Auto-layout after adding
-        layout_objects_internal(&proj5);
-        render_all(&win5b, &*proj5b.borrow(), sel5.borrow().as_deref());
+	};
+
+	println!("rust-side: ✓ Added duck-type: {}", new_obj.name);
+	proj_mut.objects.push(new_obj.clone());
+	drop(proj_mut);
+
+	// Push to history for unlimited undo
+	{
+            let mut hist = hist_confirm.borrow_mut();
+            hist.push(rs_dma_lib::history::Action::CreateDuckType(new_obj));
+	}
+
+	// Reset wizard state
+	win_confirm.set_show_type_dialog(false);
+	win_confirm.set_dialog_current_step(0);
+	win_confirm.set_dialog_type_input("".into());
+	win_confirm.set_dialog_fields_input("".into());
+	win_confirm.set_dialog_services_input("".into());
+	win_confirm.set_dialog_instantiation_name("".into());
+	win_confirm.set_dialog_selected_type("".into());
+
+	// Auto-layout and render
+	layout_objects_internal(&proj_confirm);
+	render_all(&win_confirm, &*proj_confirm.borrow(), sel_confirm.borrow().as_deref());
     });
-    
-    // Dialog cancelled
-    main_window.on_dialog_cancelled(move || {
-        win5a2.set_show_type_dialog(false);
-        println!("rust-side: ✗ Add Object cancelled");
-    });
+
 
     // === ASSOCIATION CREATION (click 2 objects) ===
     let proj6 = project.clone();
@@ -456,6 +625,9 @@ fn main() {
             id: "A".into(),
             name: "A: App".into(),
             type_name: "App".into(),
+	    instantiation_name: "A".into(),
+	    fields: vec![],
+	    services: vec![],
             is_trait: false,
             x: 300.0,
             y: 100.0,
@@ -466,6 +638,9 @@ fn main() {
             id: "B".into(),
             name: "B: Database".into(),
             type_name: "Database".into(),
+	    instantiation_name: "B".into(),
+	    fields: vec![],
+	    services: vec![],
             is_trait: false,
             x: 100.0,
             y: 400.0,
@@ -476,6 +651,9 @@ fn main() {
             id: "C".into(),
             name: "C: Cache".into(),
             type_name: "Cache".into(),
+	    instantiation_name: "C".into(),
+	    fields: vec![],
+	    services: vec![],
             is_trait: false,
             x: 500.0,
             y: 400.0,
