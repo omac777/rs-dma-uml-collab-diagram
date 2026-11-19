@@ -6,12 +6,12 @@ description = "A native Linux GUI application for creating Rust UML Collaboratio
 authors = ["David Marceau <uticdmarceau2007@yahoo.ca>"]
 
 [dependencies]
-slint = "1.17.1"
+slint = { git = "https://github.com/slint-ui/slint.git", branch = "master" }
 rs-dma-lib = { path = "../rs-dma-lib" }
 rfd = "0.15"
 
 [build-dependencies]
-slint-build = "1.17.1"
+slint-build = { git = "https://github.com/slint-ui/slint.git", branch = "master" }
 
 [[bin]]
 name = "rucd-editor"
